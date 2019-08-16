@@ -1,25 +1,33 @@
 package com.vivian.java.vchat;
+
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.Socket;
 import java.util.Map;
+import java.util.Queue;
 import java.util.Scanner;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class ServerChat {
 
-	public static void startChatThreads(Socket socketA, Map<Integer, PrintWriter> map) {
-		SocketReceiveSendRun aToB = new SocketReceiveSendRun(socketA, map);
+	public static void startChatThreads(Socket socketA, Map<Integer, PrintWriter> map,
+			Map<Integer, Queue<String>> leftMessageMap) {
+		SocketReceiveSendRun aToB = new SocketReceiveSendRun(socketA, map, leftMessageMap);
 		new Thread(aToB).start();
 	}
 
 	public static class SocketReceiveSendRun implements Runnable {
 		Socket receiveSocket;
 		Map<Integer, PrintWriter> map;
+		Map<Integer, Queue<String>> leftMessageMap;
 
-		public SocketReceiveSendRun(Socket receiveSocket, Map<Integer, PrintWriter> map) {
+		public SocketReceiveSendRun(Socket receiveSocket, Map<Integer, PrintWriter> map,
+				Map<Integer, Queue<String>> leftMessageMap) {
 			this.receiveSocket = receiveSocket;
 			this.map = map;
+			this.leftMessageMap = leftMessageMap;
 		}
+
 		@SuppressWarnings("resource")
 		@Override
 		public void run() {
@@ -36,7 +44,16 @@ public class ServerChat {
 				String line = socketIn.nextLine();
 
 				PrintWriter writer = map.get(toId);
-				writer.println(line);
+				if (writer == null) {
+					Queue<String> offlineMessageQueue = leftMessageMap.get(toId);
+					if (offlineMessageQueue == null) {
+						offlineMessageQueue = new ConcurrentLinkedQueue<>();
+						leftMessageMap.put(toId, offlineMessageQueue);
+					}
+					offlineMessageQueue.offer(line);
+				} else {
+					writer.println(line);
+				}
 			}
 		}
 	}
